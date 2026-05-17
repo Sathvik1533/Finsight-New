@@ -1,0 +1,19 @@
+{
+  "enabled": true,
+  "name": "Pre-Tool Notification",
+  "description": "Triggers audio notification before any write operation is executed",
+  "version": "1",
+  "when": {
+    "type": "preToolUse",
+    "toolTypes": [
+      "write"
+    ]
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "bash .claude/hooks/notification.sh approval",
+    "timeout": 30
+  },
+  "workspaceFolderName": "Finsight New ",
+  "shortName": "pre-tool-notification"
+}
