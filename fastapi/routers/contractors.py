@@ -69,3 +69,12 @@ async def update_contractor(contractor_id: str, body: ContractorUpdate, x_user_i
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{contractor_id}")
+async def delete_contractor(contractor_id: str, x_user_id: str = Header(...)):
+    try:
+        supabase.table("contractors").delete().eq("id", contractor_id).eq("user_id", x_user_id).execute()
+        return JSONResponse(content={"ok": True})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

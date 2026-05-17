@@ -41,3 +41,16 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const data = await res.json()
   return NextResponse.json(data, { status: res.status })
 }
+
+export async function DELETE(_req: NextRequest, { params }: Params) {
+  const supabase = createSupabaseServerClient()
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const res = await fetch(`${FASTAPI}/contractors/${params.id}`, {
+    method: 'DELETE',
+    headers: fastapiHeaders(session.user.id),
+  })
+  const data = await res.json()
+  return NextResponse.json(data, { status: res.status })
+}

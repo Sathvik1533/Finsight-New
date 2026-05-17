@@ -1,14 +1,13 @@
 'use client'
+
 import React, { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import {
-  Plus, RefreshCw, FileText, AlertTriangle, Lock,
-  CheckCircle, User, ArrowLeft, X
-} from 'lucide-react'
+import { Plus, User, Trash2, RefreshCw, FileText, Lock, CheckCircle, AlertTriangle, X } from 'lucide-react'
+import { BlurFade } from '@/components/ui/blur-fade'
+import { toast } from 'sonner'
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-interface Contractor {
+type Contractor = {
   id: string
   name: string
   role?: string
@@ -23,55 +22,57 @@ interface Contractor {
   created_at: string
 }
 
-// ── Risk helpers ──────────────────────────────────────────────────────────────
-function riskColor(score: number) {
-  if (score <= 30) return { bg: 'bg-[#f0b429]/15', text: 'text-[#f0b429]', border: 'border-[#f0b429]/30', glow: 'shadow-[#f0b429]/20' }
-  if (score <= 65) return { bg: 'bg-amber-500/15',   text: 'text-amber-400',   border: 'border-amber-500/30',   glow: 'shadow-amber-500/20' }
-  return              { bg: 'bg-red-500/15',          text: 'text-red-400',     border: 'border-red-500/30',     glow: 'shadow-red-500/20' }
+function inr(n: number) {
+  return '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 })
 }
 
-function riskLabel(score: number) {
-  if (score <= 30) return 'Low Risk'
-  if (score <= 65) return 'Moderate'
-  return 'High Risk'
+function riskBadge(score: number) {
+  if (score <= 0)  return { label: 'Unscored',  bg: 'rgba(255,255,255,0.04)', color: 'var(--t30)',  border: 'var(--hair)' }
+  if (score <= 30) return { label: 'Low Risk',  bg: 'rgba(240,180,41,0.1)',  color: 'var(--gold)', border: 'rgba(240,180,41,0.25)' }
+  if (score <= 65) return { label: 'Moderate',  bg: 'rgba(245,158,11,0.1)',  color: '#fbbf24',     border: 'rgba(245,158,11,0.25)' }
+  return               { label: 'High Risk',    bg: 'rgba(239,68,68,0.1)',   color: '#f87171',     border: 'rgba(239,68,68,0.25)' }
 }
 
-function actionBadge(action?: string) {
-  if (action === 'pay')         return { label: 'Pay',         cls: 'bg-[#f0b429]/10 text-[#f0b429] border-[#f0b429]/20' }
-  if (action === 'hold')        return { label: 'Hold',        cls: 'bg-amber-500/10   text-amber-400   border-amber-500/20' }
-  if (action === 'investigate') return { label: 'Investigate', cls: 'bg-red-500/10     text-red-400     border-red-500/20' }
-  return { label: 'Unscored', cls: 'bg-white/5 text-white/40 border-white/10' }
-}
-
-function daysAgo(iso: string) {
-  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)
-  return d === 0 ? 'today' : d === 1 ? '1 day ago' : `${d} days ago`
+function Pulse({ w = '100%', h = 20, r = 6 }: { w?: string | number; h?: number; r?: number }) {
+  return (
+    <div style={{
+      width: w, height: h, borderRadius: r,
+      background: 'linear-gradient(90deg, var(--surface) 0px, var(--surface-2) 150px, var(--surface) 300px)',
+      backgroundSize: '600px 100%',
+      animation: 'skeleton-sweep 1.6s ease-in-out infinite',
+    }} />
+  )
 }
 
 // ── Add Contractor Modal ──────────────────────────────────────────────────────
-function AddContractorModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function AddModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [name, setName]       = useState('')
   const [role, setRole]       = useState('')
   const [contact, setContact] = useState('')
+  const [notes, setNotes]     = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
+  const [err, setErr]         = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!name.trim()) return
-    setLoading(true)
-    setError('')
+    if (!name.trim()) { setErr('Name is required'); return }
+    setLoading(true); setErr('')
     try {
       const res = await fetch('/api/contractors', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), role: role.trim() || undefined, contact: contact.trim() || undefined }),
+        body: JSON.stringify({
+          name: name.trim(),
+          role: role.trim() || undefined,
+          contact: contact.trim() || undefined,
+          notes: notes.trim() || undefined,
+        }),
       })
       if (!res.ok) throw new Error('Failed to create contractor')
-      onCreated()
-      onClose()
+      toast.success(`${name.trim()} added`)
+      onCreated(); onClose()
     } catch (e: any) {
-      setError(e.message)
+      setErr(e.message)
     } finally {
       setLoading(false)
     }
@@ -79,58 +80,68 @@ function AddContractorModal({ onClose, onCreated }: { onClose: () => void; onCre
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 50,
+        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+      }}
     >
       <motion.div
-        className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0f0f14] p-8 shadow-2xl"
-        initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+        initial={{ scale: 0.95, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 16 }}
         onClick={(e) => e.stopPropagation()}
+        style={{ width: '100%', maxWidth: 440, background: '#0f0f14', border: '1px solid var(--hair)', borderRadius: 16, padding: 28 }}
       >
-        <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Add Contractor</h2>
-          <button onClick={onClose} className="text-white/40 hover:text-white transition-colors">
-            <X className="h-5 w-5" />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 22 }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', fontWeight: 400, letterSpacing: '-0.03em', color: 'var(--t100)' }}>
+            Add Contractor
+          </h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t30)', padding: 0 }}>
+            <X size={16} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-white/50">Name *</label>
-            <input
-              value={name} onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Ravi Kumar"
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 transition-all"
-              required
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-white/50">Role</label>
-            <input
-              value={role} onChange={(e) => setRole(e.target.value)}
-              placeholder="e.g. Plumber, Electrician"
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 transition-all"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-white/50">Contact</label>
-            <input
-              value={contact} onChange={(e) => setContact(e.target.value)}
-              placeholder="Phone or email"
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 transition-all"
-            />
-          </div>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {[
+            { label: 'Name *',           value: name,    set: setName,    placeholder: 'e.g. Ravi Kumar' },
+            { label: 'Role',             value: role,    set: setRole,    placeholder: 'e.g. Electrician' },
+            { label: 'Phone / Email',    value: contact, set: setContact, placeholder: 'e.g. 9876543210' },
+            { label: 'Notes',            value: notes,   set: setNotes,   placeholder: 'Optional notes' },
+          ].map(({ label, value, set, placeholder }) => (
+            <div key={label}>
+              <label style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t40)', marginBottom: 7 }}>
+                {label}
+              </label>
+              <input
+                value={value}
+                onChange={(e) => set(e.target.value)}
+                placeholder={placeholder}
+                style={{
+                  width: '100%', padding: '10px 13px', boxSizing: 'border-box',
+                  background: 'var(--surface)', border: '1px solid var(--hair)',
+                  borderRadius: 8, fontSize: 13, color: 'var(--t80)',
+                  fontFamily: 'var(--font-body)', outline: 'none',
+                }}
+              />
+            </div>
+          ))}
 
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {err && <p style={{ fontSize: 12, color: 'var(--red)' }}>{err}</p>}
 
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose}
-              className="flex-1 rounded-lg border border-white/10 bg-white/5 py-3 text-sm font-medium text-white/60 hover:text-white transition-colors">
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+            <button type="button" onClick={onClose} style={{
+              flex: 1, padding: '11px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500,
+              background: 'transparent', border: '1px solid var(--hair)', color: 'var(--t40)',
+              fontFamily: 'var(--font-body)', cursor: 'pointer',
+            }}>
               Cancel
             </button>
-            <button type="submit" disabled={loading || !name.trim()}
-              className="flex-1 rounded-lg bg-[#f0b429] py-3 text-sm font-semibold text-black hover:bg-[#f0b429] disabled:opacity-50 transition-colors">
+            <button type="submit" disabled={loading} style={{
+              flex: 1, padding: '11px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700,
+              background: 'var(--gold)', color: '#09090f', border: 'none',
+              fontFamily: 'var(--font-body)', cursor: 'pointer', opacity: loading ? 0.7 : 1,
+            }}>
               {loading ? 'Adding…' : 'Add Contractor'}
             </button>
           </div>
@@ -140,199 +151,187 @@ function AddContractorModal({ onClose, onCreated }: { onClose: () => void; onCre
   )
 }
 
-// ── Audit Brief Panel ─────────────────────────────────────────────────────────
-function AuditBriefPanel({ brief, streaming, onClose }: { brief: string; streaming: boolean; onClose: () => void }) {
+// ── Delete Confirmation Modal ─────────────────────────────────────────────────
+function DeleteModal({ name, onClose, onConfirm, loading }: {
+  name: string; onClose: () => void; onConfirm: () => void; loading: boolean
+}) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }}
-      className="mt-4 rounded-xl border border-sky-500/20 bg-sky-500/5 p-5"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 50,
+        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+      }}
     >
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-xs font-semibold uppercase tracking-widest text-sky-400">AI Audit Brief</span>
-          {streaming && <span className="h-2 w-2 rounded-full bg-sky-400 animate-pulse" />}
+      <motion.div
+        initial={{ scale: 0.95, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 16 }}
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: '100%', maxWidth: 380, background: '#0f0f14', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 16, padding: 28 }}
+      >
+        <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+          <Trash2 size={18} style={{ color: '#f87171' }} />
         </div>
-        <button onClick={onClose} className="text-white/30 hover:text-white/70 transition-colors">
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-      {/* Serif card — intentional contrast, tokens stream in live */}
-      <p className="font-serif text-sm leading-relaxed text-white/80">
-        {brief}
-        {streaming && <span className="animate-pulse text-sky-400">▍</span>}
-      </p>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem', fontWeight: 400, letterSpacing: '-0.03em', color: 'var(--t100)', marginBottom: 8 }}>
+          Delete contractor?
+        </h2>
+        <p style={{ fontSize: 13, color: 'var(--t40)', lineHeight: 1.6, marginBottom: 22 }}>
+          <strong style={{ color: 'var(--t70)' }}>{name}</strong> will be permanently removed. This cannot be undone.
+        </p>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onClose} style={{
+            flex: 1, padding: '11px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500,
+            background: 'transparent', border: '1px solid var(--hair)', color: 'var(--t40)',
+            fontFamily: 'var(--font-body)', cursor: 'pointer',
+          }}>
+            Cancel
+          </button>
+          <button onClick={onConfirm} disabled={loading} style={{
+            flex: 1, padding: '11px 16px', borderRadius: 8, fontSize: 13, fontWeight: 700,
+            background: 'rgba(239,68,68,0.9)', color: '#fff', border: 'none',
+            fontFamily: 'var(--font-body)', cursor: 'pointer', opacity: loading ? 0.7 : 1,
+          }}>
+            {loading ? 'Deleting…' : 'Delete'}
+          </button>
+        </div>
+      </motion.div>
     </motion.div>
   )
 }
 
 // ── Contractor Card ───────────────────────────────────────────────────────────
-function ContractorCard({
-  contractor, onScored, index
-}: {
-  contractor: Contractor
-  onScored: () => void
-  index: number
+function ContractorCard({ c, index, onDelete, onScored }: {
+  c: Contractor; index: number; onDelete: () => void; onScored: () => void
 }) {
-  const [scoring, setScoring]       = useState(false)
-  const [briefing, setBriefing]     = useState(false)
-  const [brief, setBrief]           = useState<string | null>(null)
-  // brief === null → not requested; brief === '' → streaming started; brief === 'text' → done
-  const [scoreError, setScoreError] = useState('')
-
-  const colors = riskColor(contractor.risk_score)
-  const action = actionBadge(contractor.risk_action)
-  const isGated = contractor.risk_score > 65 && contractor.risk_score > 0
-  const hasScore = contractor.risk_score > 0 || contractor.risk_action
+  const [scoring, setScoring]   = useState(false)
+  const [scoreErr, setScoreErr] = useState('')
+  const badge = riskBadge(c.risk_score)
+  const isGated = c.risk_score > 65 && c.risk_score > 0
 
   async function handleScore() {
-    setScoring(true)
-    setScoreError('')
+    setScoring(true); setScoreErr('')
     try {
-      const res = await fetch(`/api/risk/score/${contractor.id}`, { method: 'POST' })
-      if (!res.ok) throw new Error('Scoring failed')
+      const res = await fetch(`/api/risk/score/${c.id}`, { method: 'POST' })
+      if (!res.ok) throw new Error()
       onScored()
-    } catch (e: any) {
-      setScoreError('Scoring failed — check FastAPI connection')
+      toast.success('Risk score updated')
+    } catch {
+      setScoreErr('Scoring failed — check FastAPI')
     } finally {
       setScoring(false)
     }
   }
 
-  async function handleBrief() {
-    if (brief) { setBrief(null); return }
-    setBriefing(true)
-    setBrief('')
-    try {
-      const res = await fetch(`/api/risk/brief/stream/${contractor.id}`, { method: 'POST' })
-      if (!res.ok) throw new Error('Brief generation failed')
-
-      const reader = res.body!.getReader()
-      const decoder = new TextDecoder()
-      let text = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        text += decoder.decode(value, { stream: true })
-        setBrief(text)
-      }
-    } catch {
-      setBrief('Failed to generate brief. Ensure FastAPI is running.')
-    } finally {
-      setBriefing(false)
-    }
-  }
-
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay: index * 0.06 }}
-      className="rounded-2xl border border-white/8 bg-white/[0.03] p-6 hover:border-white/14 hover:bg-white/[0.05] transition-all duration-200"
+      transition={{ duration: 0.3, delay: index * 0.06 }}
+      style={{
+        background: 'var(--surface)',
+        border: isGated ? '1px solid rgba(239,68,68,0.25)' : '1px solid var(--hair)',
+        borderRadius: 12, padding: '20px 22px',
+      }}
     >
-      {/* Top row: name + risk badge */}
-      <div className="flex items-start justify-between gap-4 mb-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/8">
-            <User className="h-5 w-5 text-white/60" />
+      {/* Top row */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+            background: 'rgba(240,180,41,0.08)', border: '1px solid rgba(240,180,41,0.15)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: 'var(--gold)',
+          }}>
+            {c.name.charAt(0).toUpperCase()}
           </div>
           <div>
-            <h3 className="font-semibold text-white">{contractor.name}</h3>
-            <p className="text-xs text-white/40">{contractor.role || 'Contractor'}</p>
+            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--t100)', marginBottom: 2 }}>{c.name}</p>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--t30)' }}>
+              {c.role ?? 'Contractor'}{c.contact ? ` · ${c.contact}` : ''}
+            </p>
           </div>
         </div>
 
-        {/* Risk score badge */}
-        {hasScore ? (
-          <div className={`flex items-center gap-2 rounded-xl border px-3 py-1.5 ${colors.bg} ${colors.border}`}>
-            <span className={`font-mono text-lg font-bold tabular-nums ${colors.text}`}>
-              {contractor.risk_score}
-            </span>
-            <div>
-              <p className={`text-xs font-semibold ${colors.text}`}>{riskLabel(contractor.risk_score)}</p>
-              {contractor.risk_reason && (
-                <p className="text-xs text-white/40 max-w-[120px] truncate" title={contractor.risk_reason}>
-                  {contractor.risk_reason}
-                </p>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5">
-            <p className="text-xs text-white/30">Not scored</p>
-          </div>
-        )}
+        {/* Risk badge + delete */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <span style={{
+            fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
+            padding: '4px 9px', borderRadius: 20,
+            background: badge.bg, color: badge.color, border: `1px solid ${badge.border}`,
+          }}>
+            {c.risk_score > 0 ? `${c.risk_score} · ` : ''}{badge.label}
+          </span>
+          <motion.button
+            onClick={onDelete}
+            whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--t25)', padding: 4, borderRadius: 6,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'color 150ms',
+            }}
+          >
+            <Trash2 size={13} />
+          </motion.button>
+        </div>
       </div>
 
-      {/* Meta row */}
-      <div className="flex items-center gap-3 mb-5 flex-wrap">
-        <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${action.cls}`}>
-          {action.label}
-        </span>
-        {contractor.total_paid > 0 && (
-          <span className="text-xs text-white/40">
-            ₹{contractor.total_paid.toLocaleString('en-IN', { maximumFractionDigits: 0 })} paid
+      {/* Stats row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14 }}>
+        <div>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t25)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>Total Paid</p>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: c.total_paid > 0 ? 'var(--t90)' : 'var(--t30)', letterSpacing: '-0.02em' }}>
+            {c.total_paid > 0 ? inr(c.total_paid) : '—'}
+          </p>
+        </div>
+        <div>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--t25)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>Status</p>
+          <span style={{
+            fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600,
+            padding: '2px 7px', borderRadius: 4,
+            background: c.status === 'active' ? 'rgba(22,163,74,0.1)' : 'rgba(255,255,255,0.05)',
+            color: c.status === 'active' ? '#4ade80' : 'var(--t40)',
+            border: c.status === 'active' ? '1px solid rgba(22,163,74,0.25)' : '1px solid var(--hair)',
+          }}>
+            {c.status}
           </span>
-        )}
-        <span className="text-xs text-white/30">
-          Active {daysAgo(contractor.last_update)}
-        </span>
+        </div>
       </div>
 
       {/* Payment gate warning */}
-      <AnimatePresence>
-        {isGated && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-            className="mb-4 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/8 px-4 py-3"
-          >
-            <Lock className="h-4 w-4 flex-shrink-0 text-red-400" />
-            <p className="text-xs text-red-300">
-              <strong>Payment Gate Active</strong> — {contractor.risk_reason || 'High risk score detected'}
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {isGated && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '10px 12px', borderRadius: 8, marginBottom: 12,
+          background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)',
+        }}>
+          <Lock size={12} style={{ color: '#f87171', flexShrink: 0 }} />
+          <p style={{ fontSize: 12, color: '#fca5a5' }}>
+            Payment gate active — {c.risk_reason ?? 'High risk score'}
+          </p>
+        </div>
+      )}
 
-      {/* Audit brief */}
-      <AnimatePresence>
-        {brief !== null && <AuditBriefPanel brief={brief} streaming={briefing} onClose={() => setBrief(null)} />}
-      </AnimatePresence>
-
-      {scoreError && <p className="mb-3 text-xs text-red-400">{scoreError}</p>}
+      {scoreErr && <p style={{ fontSize: 11, color: 'var(--red)', marginBottom: 8 }}>{scoreErr}</p>}
 
       {/* Action buttons */}
-      <div className="flex gap-2 mt-2">
-        <button
-          onClick={handleScore}
-          disabled={scoring}
-          className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-medium text-white/70 hover:border-[#f0b429]/30 hover:bg-[#f0b429]/10 hover:text-[#f0b429] disabled:opacity-50 transition-all duration-150"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${scoring ? 'animate-spin' : ''}`} />
-          {scoring ? 'Scoring…' : 'AI Score'}
-        </button>
-
-        <button
-          onClick={handleBrief}
-          disabled={briefing}
-          className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-xs font-medium text-white/70 hover:border-sky-500/30 hover:bg-sky-500/10 hover:text-sky-400 disabled:opacity-50 transition-all duration-150"
-        >
-          <FileText className="h-3.5 w-3.5" />
-          {briefing ? 'Generating…' : brief !== null ? 'Hide Brief' : 'Audit Brief'}
-        </button>
-
-        <button
-          onClick={() => isGated && alert(`Payment blocked: ${contractor.risk_reason}`)}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-xs font-semibold transition-all duration-150 ${
-            isGated
-              ? 'border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20'
-              : 'border-[#f0b429]/30 bg-[#f0b429]/10 text-[#f0b429] hover:bg-[#f0b429]/15'
-          }`}
-        >
-          {isGated ? <Lock className="h-3.5 w-3.5" /> : <CheckCircle className="h-3.5 w-3.5" />}
-          {isGated ? 'Blocked' : 'Release'}
-        </button>
-      </div>
+      <motion.button
+        onClick={handleScore}
+        disabled={scoring}
+        whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          width: '100%', padding: '9px 14px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+          background: 'transparent', border: '1px solid var(--hair)', color: 'var(--t40)',
+          fontFamily: 'var(--font-body)', cursor: 'pointer',
+          transition: 'border-color 150ms, color 150ms',
+          opacity: scoring ? 0.6 : 1,
+        }}
+      >
+        <RefreshCw size={12} style={{ animation: scoring ? 'spin 1s linear infinite' : 'none' }} />
+        {scoring ? 'Scoring…' : 'Run AI Risk Score'}
+      </motion.button>
     </motion.div>
   )
 }
@@ -340,168 +339,184 @@ function ContractorCard({
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function ContractorsPage() {
   const router = useRouter()
+
   const [contractors, setContractors] = useState<Contractor[]>([])
   const [loading, setLoading]         = useState(true)
   const [error, setError]             = useState<string | null>(null)
   const [showAdd, setShowAdd]         = useState(false)
-  const [alerts, setAlerts]           = useState<any[]>([])
+  const [deleteTarget, setDeleteTarget] = useState<Contractor | null>(null)
+  const [deleting, setDeleting]       = useState(false)
 
   const fetchContractors = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+    setLoading(true); setError(null)
     try {
       const res = await fetch('/api/contractors')
       if (res.status === 401) { router.push('/auth'); return }
       if (!res.ok) throw new Error('Failed to load contractors')
       setContractors(await res.json())
     } catch (e: any) {
-      setError(e.message)
+      setError(e.message ?? 'Something went wrong')
     } finally {
       setLoading(false)
     }
   }, [router])
 
-  const fetchAlerts = useCallback(async () => {
-    try {
-      const res = await fetch('/api/risk/alerts')
-      if (res.ok) setAlerts(await res.json())
-    } catch { /* alerts are optional */ }
-  }, [])
+  useEffect(() => { fetchContractors() }, [fetchContractors])
 
-  useEffect(() => {
-    fetchContractors()
-    fetchAlerts()
-  }, [fetchContractors, fetchAlerts])
+  async function handleDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/contractors/${deleteTarget.id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Delete failed')
+      toast.success(`${deleteTarget.name} removed`)
+      setDeleteTarget(null)
+      fetchContractors()
+    } catch {
+      toast.error('Failed to delete contractor')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const highRisk = contractors.filter((c) => c.risk_score > 65).length
-  const avgScore = contractors.length
-    ? Math.round(contractors.reduce((s, c) => s + c.risk_score, 0) / contractors.length)
-    : 0
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] px-6 py-8 md:px-8">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '40px 32px 80px' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto' }}>
 
         {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
-        >
-          <div className="space-y-1">
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="mb-2 flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors"
+        <BlurFade delay={0} duration={0.5} style={{ marginBottom: 32 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+            <div>
+              <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: 8 }}>
+                Contractors
+              </p>
+              <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(1.6rem, 3vw, 2.2rem)', fontWeight: 300, letterSpacing: '-0.04em', color: 'var(--t100)', lineHeight: 1.1 }}>
+                All Contractors
+              </h1>
+              {!loading && contractors.length > 0 && (
+                <p style={{ fontSize: 13, color: 'var(--t40)', marginTop: 6 }}>
+                  {contractors.length} contractor{contractors.length !== 1 ? 's' : ''}
+                  {highRisk > 0 && <span style={{ color: '#f87171' }}> · {highRisk} high risk</span>}
+                </p>
+              )}
+            </div>
+            <motion.button
+              onClick={() => setShowAdd(true)}
+              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                background: 'var(--gold)', color: '#09090f',
+                border: 'none', borderRadius: 9,
+                padding: '11px 20px', fontSize: 13, fontWeight: 700,
+                fontFamily: 'var(--font-body)', cursor: 'pointer', letterSpacing: '-0.01em',
+              }}
             >
-              <ArrowLeft className="h-3.5 w-3.5" /> Dashboard
-            </button>
-            <h1 className="type-h1">Contractors</h1>
-            <p className="type-body mt-1">Track payments and risk across all contractors</p>
+              <Plus size={14} strokeWidth={2.5} />
+              Add Contractor
+            </motion.button>
           </div>
+        </BlurFade>
 
-          <button
-            onClick={() => setShowAdd(true)}
-            className="btn-ghost flex items-center gap-2"
-            style={{ border: '1px solid var(--signal)', color: 'var(--signal)' }}
-          >
-            <Plus className="h-4 w-4" />
-            Add Contractor
-          </button>
-        </motion.div>
+        {/* Error state */}
+        {error && (
+          <BlurFade delay={0.05} style={{ marginBottom: 20 }}>
+            <div style={{
+              background: 'rgba(220,38,38,0.07)', border: '1px solid rgba(220,38,38,0.2)',
+              borderRadius: 9, padding: '14px 18px', fontSize: 13, color: 'var(--red)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              {error}
+              <button onClick={fetchContractors} style={{ color: 'var(--red)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontSize: 13 }}>
+                retry
+              </button>
+            </div>
+          </BlurFade>
+        )}
 
-        {/* Ghost alerts banner */}
-        <AnimatePresence>
-          {alerts.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-              className="rounded-xl border border-amber-500/20 bg-amber-500/8 p-5"
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <AlertTriangle className="h-4 w-4 text-amber-400" />
-                <span className="text-sm font-semibold text-amber-400">
-                  {alerts.length} Ghost Contractor Alert{alerts.length > 1 ? 's' : ''}
-                </span>
+        {/* Loading — skeleton cards */}
+        {loading && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 12 }}>
+            {[...Array(4)].map((_, i) => (
+              <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--hair)', borderRadius: 12, padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <Pulse w={40} h={40} r={10} />
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 7 }}>
+                    <Pulse h={13} r={4} />
+                    <Pulse w="60%" h={10} r={4} />
+                  </div>
+                </div>
+                <Pulse h={36} r={8} />
+                <Pulse h={36} r={8} />
               </div>
-              <ul className="space-y-2">
-                {alerts.map((a) => (
-                  <li key={a.contractor_id} className="text-xs text-white/60">
-                    <span className="text-white/80 font-medium">{a.contractor_name}</span> — {a.alert_text}
-                  </li>
-                ))}
-              </ul>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            ))}
+          </div>
+        )}
 
-        {/* Stats row */}
-        {contractors.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}
-            className="grid grid-cols-3 gap-4"
-          >
-            {[
-              { label: 'Total Contractors', value: contractors.length.toString() },
-              { label: 'Avg Risk Score', value: avgScore > 0 ? avgScore.toString() : '—' },
-              { label: 'High Risk', value: highRisk.toString(), warn: highRisk > 0 },
-            ].map(({ label, value, warn }) => (
-              <div key={label} className="rounded-xl border border-white/8 bg-white/[0.03] p-4">
-                <p className="text-xs text-white/40 mb-1">{label}</p>
-                <p className={`text-2xl font-bold tabular-nums ${warn ? 'text-red-400' : 'text-white'}`}>
-                  {value}
+        {/* Empty state */}
+        {!loading && !error && contractors.length === 0 && (
+          <BlurFade delay={0.08}>
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 14, padding: '80px 24px',
+              border: '1px dashed var(--hair)', borderRadius: 12, textAlign: 'center',
+            }}>
+              <div style={{ width: 52, height: 52, borderRadius: 12, background: 'rgba(240,180,41,0.08)', border: '1px solid rgba(240,180,41,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <User size={22} style={{ color: 'var(--gold)', opacity: 0.6 }} />
+              </div>
+              <div>
+                <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--t50)', marginBottom: 4 }}>No contractors added yet</p>
+                <p style={{ fontSize: 12, color: 'var(--t30)', lineHeight: 1.6 }}>
+                  Add your first contractor to start tracking<br />payments and AI risk scoring.
                 </p>
               </div>
-            ))}
-          </motion.div>
-        )}
-
-        {/* Error */}
-        {error && (
-          <div className="rounded-xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-200">
-            {error}
-          </div>
-        )}
-
-        {/* Loading skeleton */}
-        {loading && (
-          <div className="grid gap-4 md:grid-cols-2">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-48 animate-pulse rounded-2xl border border-white/8 bg-white/[0.03]" />
-            ))}
-          </div>
+              <motion.button
+                onClick={() => setShowAdd(true)}
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 7,
+                  background: 'var(--gold)', color: '#09090f',
+                  border: 'none', borderRadius: 8,
+                  padding: '10px 18px', fontSize: 13, fontWeight: 700,
+                  fontFamily: 'var(--font-body)', cursor: 'pointer',
+                }}
+              >
+                <Plus size={13} strokeWidth={2.5} />
+                Add your first contractor
+              </motion.button>
+            </div>
+          </BlurFade>
         )}
 
         {/* Contractor grid */}
-        {!loading && contractors.length === 0 && !error && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 py-20 text-center"
-          >
-            <User className="mb-4 h-10 w-10 text-white/20" />
-            <p className="text-base font-medium text-white/50">No contractors yet</p>
-            <p className="mt-1 text-sm text-white/30">Add your first contractor to start AI risk scoring</p>
-            <button
-              onClick={() => setShowAdd(true)}
-              className="mt-6 rounded-lg bg-[#f0b429]/10 border border-[#f0b429]/20 px-5 py-2.5 text-sm font-medium text-[#f0b429] hover:bg-[#f0b429]/15 transition-colors"
-            >
-              Add Contractor
-            </button>
-          </motion.div>
-        )}
-
         {!loading && contractors.length > 0 && (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 12 }}>
             {contractors.map((c, i) => (
-              <ContractorCard key={c.id} contractor={c} onScored={fetchContractors} index={i} />
+              <ContractorCard
+                key={c.id}
+                c={c}
+                index={i}
+                onDelete={() => setDeleteTarget(c)}
+                onScored={fetchContractors}
+              />
             ))}
           </div>
         )}
+
       </div>
 
-      {/* Add modal */}
+      {/* Modals */}
       <AnimatePresence>
-        {showAdd && (
-          <AddContractorModal
-            onClose={() => setShowAdd(false)}
-            onCreated={fetchContractors}
+        {showAdd && <AddModal onClose={() => setShowAdd(false)} onCreated={fetchContractors} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {deleteTarget && (
+          <DeleteModal
+            name={deleteTarget.name}
+            onClose={() => setDeleteTarget(null)}
+            onConfirm={handleDelete}
+            loading={deleting}
           />
         )}
       </AnimatePresence>
