@@ -59,3 +59,4 @@ tsconfig.tsbuildinfo
 
 # Graphify cache (auto-generated, not code)
 graphify-out/cache/
+"next -env.d 2.ts"
