@@ -58,16 +58,13 @@ async def score_contractor(contractor_id: str, x_user_id: str = Header(...)):
             raise HTTPException(status_code=404, detail="Contractor not found")
         contractor = c.data
 
-        receipts = supabase.table("receipts").select("amount,merchant,created_at,status").eq("contractor_id", contractor_id).execute()
-        payments = receipts.data or []
-        total_paid = sum(p.get("amount", 0) for p in payments)
+        total_paid = contractor.get("total_paid") or 0
         days = _days_inactive(contractor["last_update"])
 
         result = await _groq_json(
             system="You are a payment risk analyst. Return ONLY valid JSON. No prose. No markdown.",
             user=f"""Contractor: {contractor['name']}, Role: {contractor.get('role', 'unknown')}
-Total payments: {len(payments)}, Total amount: ₹{total_paid:.2f}
-Payment dates: {[p['created_at'] for p in payments]}
+Total paid: ₹{total_paid:.2f}
 Days inactive: {days}
 Notes: {contractor.get('notes') or 'none'}
 
@@ -79,7 +76,6 @@ Score meaning: 0=fully reliable, 100=ghost risk/disappeared""",
             "risk_score":  result.get("score", 0),
             "risk_reason": result.get("reason", ""),
             "risk_action": result.get("action", "pay"),
-            "total_paid":  total_paid,
         }).eq("id", contractor_id).execute()
 
         return JSONResponse(content=result)
@@ -98,7 +94,7 @@ async def audit_brief(contractor_id: str, x_user_id: str = Header(...)):
             raise HTTPException(status_code=404, detail="Contractor not found")
         contractor = c.data
 
-        receipts = supabase.table("receipts").select("amount,merchant,created_at").eq("contractor_id", contractor_id).execute()
+        receipts = supabase.table("transactions").select("amount,merchant,created_at").eq("contractor_id", contractor_id).execute()
         payments = receipts.data or []
         total_paid = sum(p.get("amount", 0) for p in payments)
         days = _days_inactive(contractor["last_update"])
@@ -131,7 +127,7 @@ async def audit_brief_stream(contractor_id: str, x_user_id: str = Header(...)):
             raise HTTPException(status_code=404, detail="Contractor not found")
         contractor = c.data
 
-        receipts = supabase.table("receipts").select("amount,merchant,created_at").eq("contractor_id", contractor_id).execute()
+        receipts = supabase.table("transactions").select("amount,merchant,created_at").eq("contractor_id", contractor_id).execute()
         payments = receipts.data or []
         total_paid = sum(p.get("amount", 0) for p in payments)
         days = _days_inactive(contractor["last_update"])
@@ -194,7 +190,7 @@ async def ghost_alerts(x_user_id: str = Header(...)):
             if days < 7:
                 continue
 
-            receipts = supabase.table("receipts").select("amount").eq("contractor_id", contractor["id"]).execute()
+            receipts = supabase.table("transactions").select("amount").eq("contractor_id", contractor["id"]).execute()
             amount_at_risk = sum(p.get("amount", 0) for p in (receipts.data or []))
 
             alert_text = await _groq_text(
