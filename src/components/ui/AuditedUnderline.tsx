@@ -1,30 +1,33 @@
 'use client'
 
 import React from 'react'
-import { motion, useInView } from 'framer-motion'
 
 type AuditedUnderlineProps = {
   /** Width of the underline in px. Should match or slightly exceed the text above it. */
   width?: number
   /** Stroke thickness in px. Default 2.5 = fountain-pen weight. */
   strokeWidth?: number
-  /** Ink color. Defaults to FinSight forest green (--accent). */
+  /** Ink color. Defaults to verification vermillion. Two-color discipline:
+   *  forest green = primary UI; vermillion = the ONE verification gesture. */
   color?: string
-  /** Animation duration in seconds. Default 0.6 = a confident pen stroke, not slow. */
+  /** Animation duration in seconds. Default 0.65 = a confident pen stroke, not slow. */
   duration?: number
   /** Delay in seconds before the stroke begins. Default 0.2. */
   delay?: number
-  /** If true, animation triggers when scrolled into view. If false, on mount. */
-  inViewTrigger?: boolean
 }
 
 /**
  * Audited Underline — FinSight's signature visual element.
  *
- * A hand-traced forest-green underline drawn beneath ONE critical number per
- * screen. Animates being drawn left-to-right on mount (or on scroll-into-view),
- * with a deliberate wobble and a small upward flick at the end — like a
- * Chartered Accountant running their pen under a verified figure.
+ * A hand-traced vermillion underline drawn beneath ONE critical number per
+ * screen. Animates being drawn left-to-right on mount via CSS
+ * stroke-dashoffset (more reliable than Framer's pathLength under SSR + headless
+ * screenshot tools), with a deliberate wobble and a small upward flick at the
+ * end — like a Chartered Accountant running their pen under a verified figure.
+ *
+ * Two-color discipline: forest green (#0a5938) is primary UI everywhere.
+ * Vermillion (#b8341a) is ONLY this gesture, ONCE per screen. The colour
+ * difference is what makes the verification feel like a separate act of ink.
  *
  * Rules:
  * - Use ONCE per screen, never decoratively
@@ -32,17 +35,12 @@ type AuditedUnderlineProps = {
  * - Never under headings, labels, or buttons
  */
 export function AuditedUnderline({
-  width         = 220,
-  strokeWidth   = 2.5,
-  color         = '#0a5938',
-  duration      = 0.6,
-  delay         = 0.2,
-  inViewTrigger = false,
+  width       = 220,
+  strokeWidth = 2.5,
+  color       = '#b8341a',
+  duration    = 0.65,
+  delay       = 0.2,
 }: AuditedUnderlineProps) {
-  const ref    = React.useRef<SVGSVGElement>(null)
-  const inView = useInView(ref, { once: true, margin: '-20px' })
-  const shouldAnimate = inViewTrigger ? inView : true
-
   // Build a hand-traced path with deliberate irregularity.
   // SVG viewBox is 240×24, the path scales with `width`.
   // The path is a series of cubic Beziers with tiny vertical wobble (±0.8px)
@@ -59,41 +57,52 @@ export function AuditedUnderline({
     L 232,8
   `.trim().replace(/\s+/g, ' ')
 
+  // The dash length is a generous upper bound on the path length.
+  // The actual path is ~232 units long; 300 gives headroom for stroke joins
+  // without leaving a visible end-of-path gap once draw completes.
+  const dashLength = 300
+
+  // Unique class per instance so multiple underlines on the same page
+  // (shouldn't happen by the one-per-screen rule, but defensive) don't
+  // collide via a shared keyframe name.
+  const animId = React.useId().replace(/:/g, '')
+  const keyframesName = `audited-draw-${animId}`
+
   return (
-    <svg
-      ref={ref}
-      width={width}
-      height={24}
-      viewBox="0 0 240 24"
-      role="presentation"
-      aria-hidden="true"
-      style={{
-        display: 'block',
-        overflow: 'visible',
-        marginTop: 4,
-      }}
-    >
-      <motion.path
-        d={path}
-        stroke={color}
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-        initial={{ pathLength: 0, opacity: 0 }}
-        animate={shouldAnimate ? { pathLength: 1, opacity: 1 } : { pathLength: 0, opacity: 0 }}
-        transition={{
-          pathLength: {
-            duration,
-            delay,
-            ease: [0.65, 0, 0.35, 1],
-          },
-          opacity: {
-            duration: 0.1,
-            delay,
-          },
+    <>
+      <style>{`
+        @keyframes ${keyframesName} {
+          0%   { stroke-dashoffset: ${dashLength}; opacity: 0; }
+          10%  { opacity: 1; }
+          100% { stroke-dashoffset: 0; opacity: 1; }
+        }
+      `}</style>
+      <svg
+        width={width}
+        height={24}
+        viewBox="0 0 240 24"
+        role="presentation"
+        aria-hidden="true"
+        style={{
+          display: 'block',
+          overflow: 'visible',
+          marginTop: 4,
         }}
-      />
-    </svg>
+      >
+        <path
+          d={path}
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+          style={{
+            strokeDasharray: dashLength,
+            strokeDashoffset: dashLength,
+            animation: `${keyframesName} ${duration}s cubic-bezier(0.65, 0, 0.35, 1) ${delay}s forwards`,
+          }}
+        />
+      </svg>
+    </>
   )
 }
