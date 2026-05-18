@@ -1,30 +1,8 @@
 import type { Metadata } from 'next'
-import { Sora, Inter, JetBrains_Mono } from 'next/font/google'
+import { GeistSans } from 'geist/font/sans'
+import { GeistMono } from 'geist/font/mono'
 import './globals.css'
-
-// Display / headings — Sora. Geometric, precise, unique in fintech.
-const sora = Sora({
-  subsets: ['latin'],
-  variable: '--font-display',
-  weight: ['400', '500', '600', '700'],
-  display: 'swap',
-})
-
-// Body / UI text — Inter. Best legibility at 13–14px.
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-body',
-  weight: ['400', '500', '600'],
-  display: 'swap',
-})
-
-// Numbers / mono — JetBrains Mono. Premium for financial data.
-const mono = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-mono',
-  weight: ['400', '500', '600', '700'],
-  display: 'swap',
-})
+import { Toaster } from 'sonner'
 
 export const metadata: Metadata = {
   title: 'FinSight — AI Expense Intelligence for India',
@@ -33,22 +11,21 @@ export const metadata: Metadata = {
   keywords: ['GST', 'expense tracking', 'India', 'AI', 'freelancer', 'receipt scanner'],
 }
 
-import { Toaster } from 'sonner'
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${sora.variable} ${inter.variable} ${mono.variable}`}>
-      <body className="font-body bg-[#05090f] text-[#f2f4f7] min-h-screen antialiased">
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+      <body style={{ background: 'var(--bg)', color: 'var(--t100)', minHeight: '100vh' }}>
         {children}
         <Toaster
           position="bottom-right"
           toastOptions={{
             style: {
-              background: 'var(--surface-2)',
+              background: 'var(--surface)',
               border: '1px solid var(--hair-2)',
               color: 'var(--t100)',
-              fontFamily: 'var(--font-body)',
+              fontFamily: 'var(--font-geist-sans)',
               fontSize: 13,
+              boxShadow: '0 4px 16px rgba(13,31,23,0.10)',
             },
           }}
         />

@@ -10,60 +10,58 @@ const config: Config = {
     extend: {
       // ── Fonts ─────────────────────────────────────────────────────────
       fontFamily: {
-        display: ['var(--font-display)', 'system-ui', 'sans-serif'], // Sora
-        body:    ['var(--font-body)', 'system-ui', 'sans-serif'],    // Inter
-        mono:    ['var(--font-mono)', 'monospace'],                   // JetBrains Mono
+        display: ['var(--font-display)', 'system-ui', 'sans-serif'],
+        body:    ['Geist', 'system-ui', 'sans-serif'],
+        mono:    ['var(--font-mono)', 'monospace'],
       },
 
       // ── Color tokens ─────────────────────────────────────────────────
       colors: {
         fs: {
-          // Backgrounds
-          bg:       '#05090f',
-          surface:  '#0c1219',
-          surfaceH: '#121a24',
-
-          // Signal (the one true accent)
-          signal:   '#00c896',
-
-          // Text hierarchy
-          t100: '#f2f4f7',
-          t60:  '#8d99a8',
-          t30:  '#4a5568',
-          t10:  '#1e2a35',
-
-          // Semantic
-          amber: '#e8a020',
-          red:   '#e03e3e',
-          sky:   '#38bdf8',
+          bg:        '#f5f3ef',
+          surface:   '#ffffff',
+          surface2:  '#eeece8',
+          surface3:  '#e8e5e0',
+          accent:    '#1a6b4a',
+          accentHov: '#165a3d',
+          t100:      '#141210',
+          t70:       'rgba(20,18,16,0.70)',
+          t40:       'rgba(20,18,16,0.40)',
+          t20:       'rgba(20,18,16,0.15)',
+          green:     '#16a34a',
+          red:       '#dc2626',
+          amber:     '#b45309',
         },
       },
 
       // ── Letter spacing ────────────────────────────────────────────────
       letterSpacing: {
         display: '-0.04em',
-        heading: '-0.035em',
+        heading: '-0.03em',
         tight:   '-0.02em',
         normal:  '-0.01em',
-        label:   '0.12em',
+        label:   '0.10em',
       },
 
       // ── Line height ───────────────────────────────────────────────────
       lineHeight: {
-        display: '0.92',
-        heading: '1.0',
+        display: '0.96',
+        heading: '1.05',
         snug:    '1.2',
         body:    '1.6',
       },
 
-      // ── Border radius — 6px only ──────────────────────────────────────
+      // ── Border radius ─────────────────────────────────────────────────
       borderRadius: {
-        DEFAULT: '6px',
+        DEFAULT: '8px',
         sm:      '4px',
+        md:      '10px',
+        lg:      '12px',
+        xl:      '16px',
         none:    '0px',
       },
 
-      // ── Spacing — 8px base ────────────────────────────────────────────
+      // ── Spacing — 4px base ────────────────────────────────────────────
       spacing: {
         'px':  '1px',
         '0':   '0px',
@@ -85,8 +83,8 @@ const config: Config = {
 
       // ── Box shadow ────────────────────────────────────────────────────
       boxShadow: {
-        signal: '0 0 24px rgba(0, 200, 150, 0.15)',
-        card:   '0 1px 3px rgba(0,0,0,0.4), 0 0 0 1px rgba(242,244,247,0.07)',
+        card:   '0 1px 4px rgba(20,18,16,0.06), 0 0 0 1px rgba(20,18,16,0.06)',
+        accent: '0 0 0 3px rgba(26,107,74,0.15)',
       },
     },
   },

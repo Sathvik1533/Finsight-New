@@ -73,8 +73,13 @@
     --amber:      #b45309;
     --amber-dim:  rgba(180,83,9,0.08);
 
-    /* Typography — --font-body, --font-display, --font-mono are all injected by
-       next/font on the <html> element. Do not redeclare them here. */
+    /* Typography — one family, two cuts. Geist Sans + Geist Mono.
+       The Geist package injects --font-geist-sans and --font-geist-mono on <html>.
+       These three aliases let the rest of the codebase reference --font-display,
+       --font-body, --font-mono without coupling to the package. */
+    --font-display: var(--font-geist-sans);
+    --font-body:    var(--font-geist-sans);
+    --font-mono:    var(--font-geist-mono);
 
     /* Dark panel tokens — used only for ink hero sections / split-auth left panel */
     --ink-canvas: #0d1f17;
