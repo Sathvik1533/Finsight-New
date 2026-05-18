@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
 /* ─── Field ───────────────────────────────────────────────────────────── */
 function Field({
@@ -79,25 +81,35 @@ function SubmitBtn({ label, loading }: { label: string; loading: boolean }) {
 
 /* ─── Page ────────────────────────────────────────────────────────────── */
 export default function LoginPage() {
-  const [email,    setEmail]    = useState('')
-  const [password, setPassword] = useState('')
-  const [loading,  setLoading]  = useState(false)
-  const [errors,   setErrors]   = useState<{ email?: string; password?: string }>({})
+  const router = useRouter()
+  const [email,     setEmail]     = useState('')
+  const [password,  setPassword]  = useState('')
+  const [loading,   setLoading]   = useState(false)
+  const [errors,    setErrors]    = useState<{ email?: string; password?: string }>({})
+  const [authError, setAuthError] = useState<string | null>(null)
 
   function validate() {
     const e: typeof errors = {}
-    if (!email.includes('@'))        e.email    = 'Enter a valid email address'
-    if (password.length < 6)         e.password = 'Password must be at least 6 characters'
+    if (!email.includes('@'))  e.email    = 'Enter a valid email address'
+    if (password.length < 6)   e.password = 'Password must be at least 6 characters'
     return e
   }
 
-  function handleSubmit(ev: React.FormEvent) {
+  async function handleSubmit(ev: React.FormEvent) {
     ev.preventDefault()
     const e = validate()
     if (Object.keys(e).length) { setErrors(e); return }
     setErrors({})
+    setAuthError(null)
     setLoading(true)
-    setTimeout(() => setLoading(false), 1200)
+    const supabase = createClient()
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) {
+      setAuthError(error.message)
+      setLoading(false)
+      return
+    }
+    router.push('/dashboard')
   }
 
   return (
@@ -185,6 +197,16 @@ export default function LoginPage() {
 
             {/* forest green mark #1 */}
             <SubmitBtn label="Sign in" loading={loading} />
+
+            {authError && (
+              <p style={{
+                fontFamily: 'var(--font-mono)', fontSize: 12,
+                color: 'var(--error)', letterSpacing: '0.03em',
+                margin: 0, lineHeight: 1.5,
+              }}>
+                {authError}
+              </p>
+            )}
           </form>
 
           {/* Divider */}

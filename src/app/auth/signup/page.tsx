@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
 /* ─── Field ───────────────────────────────────────────────────────────── */
 function Field({
@@ -125,32 +127,46 @@ function TypeSelector({ value, onChange }: { value: string; onChange: (v: string
 
 /* ─── Page ────────────────────────────────────────────────────────────── */
 export default function SignupPage() {
-  const [name,     setName]     = useState('')
-  const [email,    setEmail]    = useState('')
-  const [gstin,    setGstin]    = useState('')
-  const [password, setPassword] = useState('')
-  const [bizType,  setBizType]  = useState('Freelancer')
-  const [loading,  setLoading]  = useState(false)
-  const [errors,   setErrors]   = useState<{
+  const router = useRouter()
+  const [name,      setName]      = useState('')
+  const [email,     setEmail]     = useState('')
+  const [gstin,     setGstin]     = useState('')
+  const [password,  setPassword]  = useState('')
+  const [bizType,   setBizType]   = useState('Freelancer')
+  const [loading,   setLoading]   = useState(false)
+  const [errors,    setErrors]    = useState<{
     name?: string; email?: string; password?: string; gstin?: string
   }>({})
+  const [authError, setAuthError] = useState<string | null>(null)
 
   function validate() {
     const e: typeof errors = {}
-    if (!name.trim())              e.name     = 'Enter your full name'
-    if (!email.includes('@'))      e.email    = 'Enter a valid email address'
-    if (password.length < 8)       e.password = 'Password must be at least 8 characters'
-    if (gstin && gstin.length !== 15) e.gstin = 'GSTIN must be 15 characters'
+    if (!name.trim())                 e.name     = 'Enter your full name'
+    if (!email.includes('@'))         e.email    = 'Enter a valid email address'
+    if (password.length < 8)          e.password = 'Password must be at least 8 characters'
+    if (gstin && gstin.length !== 15) e.gstin    = 'GSTIN must be 15 characters'
     return e
   }
 
-  function handleSubmit(ev: React.FormEvent) {
+  async function handleSubmit(ev: React.FormEvent) {
     ev.preventDefault()
     const e = validate()
     if (Object.keys(e).length) { setErrors(e); return }
     setErrors({})
+    setAuthError(null)
     setLoading(true)
-    setTimeout(() => setLoading(false), 1400)
+    const supabase = createClient()
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: name, business_type: bizType, gstin } },
+    })
+    if (error) {
+      setAuthError(error.message)
+      setLoading(false)
+      return
+    }
+    router.push('/dashboard')
   }
 
   return (
@@ -245,6 +261,16 @@ export default function SignupPage() {
 
             {/* forest green mark #1 */}
             <SubmitBtn label="Create account" loading={loading} />
+
+            {authError && (
+              <p style={{
+                fontFamily: 'var(--font-mono)', fontSize: 12,
+                color: 'var(--error)', letterSpacing: '0.03em',
+                margin: 0, lineHeight: 1.5,
+              }}>
+                {authError}
+              </p>
+            )}
           </form>
 
           {/* Divider */}
